@@ -17,96 +17,227 @@ args = parser.parse_args()
 # This variable represents our bridge's ports.  It is a 0-indexed array, as per the project spec
 PORTS = []
 
+
 # Definition of a port
 class Port:
-  def __init__(self, id, lan_port):
-    self.id = id
-    self.lan_port = lan_port
-    self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    self.socket.bind(('localhost', 0))
-    self.isRootPort = False;
-    self.isDesignatedPort = True;
+    def __init__(self, id, lan_port):
+        self.id = id
+        self.lan_port = lan_port
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket.bind(('localhost', 0))
 
-  # This method sends a BPDU on this port.  Right now, it only sends a 
-  # BPDU that says this bridge believes its the root; obviously, this 
-  # will need to be updated.
-  def send_bpdu(self,bpdu):
-    bpdu['message']['port'] = self.id
-    self.send(json.dumps(bpdu).encode('utf-8'))
+    # This method sends a BPDU on this port.  Right now, it only sends a
+    # BPDU that says this bridge believes its the root; obviously, this
+    # will need to be updated.
+    def send_bpdu(self, bpdu):
+        bpdu['message']['port'] = self.id
+        self.send(json.dumps(bpdu).encode('utf-8'))
 
-  # This method sends the provided byte array "data" to the LAN, using the 
-  # UDP connection.
-  def send(self, data):
-    print("Sending message on port %d" % self.id)
-    self.socket.sendto(data, ('localhost', self.lan_port))
+    # This method sends the provided byte array "data" to the LAN, using the
+    # UDP connection.
+    def send(self, data):
+        print("Sending message on port %d" % self.id)
+        self.socket.sendto(data, ('localhost', self.lan_port))
+
 
 # Set up our ports
 print("Bridge starting up")
 for i, lan_port in enumerate(args.lan_ports):
-  PORTS.append(Port(i, lan_port))
+    PORTS.append(Port(i, lan_port))
+
 
 # This method sends a BPDU on all ports.  You might want to call this regularly...
 def send_bpdus(bpdu):
-  for port in PORTS:
-    port.send_bpdu(bpdu)
+    for port in PORTS:
+        port.send_bpdu(bpdu)
+
 
 # Invariant, the input must be two bpdu
-def update_root_bpdu(root_bpdu,bpdu):
-      root_id = root_bpdu.get('message',0).get('root',0)
-      message_id = bpdu.get('message',0).get('root',-1)
-      root_cost = root_bpdu['message']['cost']
-      bpdu_cost = bpdu['message']['cost']
-      if (root_id < message_id):
-            root_bpdu['message']['root'] = message_id
-            root_bpdu['message']['cost'] = bpdu_cost + 1
-            root_bpdu['message']['port'] = message['message']['port']
-      elif ((root_id == message_id) & (root_cost > bpdu_cost)):
-            root_bpdu['message']['root'] = message_id
-            root_bpdu['message']['cost'] = bpdu_cost + 1
-            root_bpdu['message']['port'] = message['message']['port']
-      elif ((root_id == message_id) & (root_cost == bpdu_cost) & (root_bpdu['message']['port'] > bpdu['message']['port'] )):
-            root_bpdu['message']['root'] = message_id
-            root_bpdu['message']['cost'] = bpdu_cost + 1
-            root_bpdu['message']['port'] = message['message']['port']
-          
-            
+def update_root_bpdu(root_bpdu, bpdu):
+    change_flag = False
+    root_id = root_bpdu.get('message', 0).get('root', 0)
+    message_id = bpdu.get('message', 0).get('root', -1)
+    root_cost = root_bpdu['message']['cost']
+    bpdu_cost = bpdu['message']['cost']
+    if root_id < message_id:
+        root_bpdu['message']['root'] = message_id
+        root_bpdu['message']['cost'] = bpdu_cost + 1
+        root_bpdu['message']['port'] = message['message']['port']
+        change_flag = True
+    elif (root_id == message_id) & (root_cost > bpdu_cost):
+        root_bpdu['message']['root'] = message_id
+        root_bpdu['message']['cost'] = bpdu_cost + 1
+        root_bpdu['message']['port'] = message['message']['port']
+        change_flag = True
+    elif ((root_id == message_id) & (root_cost == bpdu_cost) & (
+            root_bpdu['message']['port'] > bpdu['message']['port'])):
+        root_bpdu['message']['root'] = message_id
+        root_bpdu['message']['cost'] = bpdu_cost + 1
+        root_bpdu['message']['port'] = message['message']['port']
+        change_flag = True
+
+    return change_flag
+
 
 def broadcast(data):
     for port in PORTS:
-      port.send(data)
+        port.send(data)
 
 
-root_bridge = {"source": args.bridge_id, 
-                          "dest": "ffff", 
-                          "msg_id": 0,
-                          "type": "bpdu", 
-                          "message": { "id": args.bridge_id, 
-                                      "root": args.bridge_id, 
-                                      "cost": 0, 
-                                      "port": 0 }}
+def transfer_port_to_port_id(port):
+    for x in range(len(PORTS) - 1):
+        if PORTS[x].lan_port == port:
+            return PORTS[x].id
+
+
+def is_tree_finished(port_message_list):
+    result = True
+    result_holder = True
+    for k in port_message_list.keys():
+        if is_unified(port_message_list[k]) == "False":
+            return False
+        elif result_holder:
+            result_holder = is_unified(port_message_list[k])
+        else:
+            result = result and result_holder == is_unified(port_message_list[k])
+            result_holder = is_unified(port_message_list[k])
+    return result
+
+
+def is_unified(port_list):
+    result = True
+    for x in range(len(port_list) - 1):
+        result = result and (port_list[x]['root'] == port_list[x + 1]['root'])
+        if not result:
+            return "False"
+
+    return port_list[0]['root']
+
+
+def message_processor(port_list, message, input_port):
+    if port_list.get(input_port, "True") == "True":
+        port_list.update({input_port: [{'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
+                                           , 'root': message['message']['root'], 'cost': message['message']['cost']}]})
+    else:
+        port_list.update({input_port: update_bpdu_in_array(port_list.get(input_port), message)})
+
+
+def update_bpdu_in_array(ports, message):
+    finish_flag = False
+    for x in range(len(ports) - 1):
+        if message['message']['id'] == (ports[x]['info']['bridge']
+                                        and message['message']['port'] == ports[x]['info']['port']):
+            ports[x] = {'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
+                , 'root': message['message']['root'], 'cost': message['message']['cost']}
+            finish_flag = True
+
+    if not finish_flag:
+        ports.append({'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
+                         , 'root': message['message']['root'], 'cost': message['message']['cost']})
+
+
+def determine_dest_port(port_list, dest_list, block_list):
+    for x in range(len(PORTS) - 1):
+        if port_list.get(PORTS[x].id, "True") == "True":
+            dest_list.append(PORTS[x])
+            print("Designated port: %s" % PORTS[x])
+    for k in port_list.keys():
+        if not k == ROOT_PORT:
+            dest_flag = True
+            for y in range(len(port_list[k]) - 1):
+                if port_list[k][y]['cost'] < root_bridge['message']['cost']:
+                    dest_flag = False
+                elif (port_list[k][y]['cost'] == root_bridge['message']['cost']
+                      and port_list[k][y]['info']['bridge'] < root_bridge['source']):
+                    dest_flag = False
+            if dest_flag:
+                dest_list.append(k)
+                print("Designated port: '%s'" % k)
+            else:
+                block_list.append(k)
+                print("Disabled port: '%s'" % k)
+
+
+def is_in_disable(port):
+    result = False
+    for x in range(len(BLOCK_LIST)):
+        if BLOCK_LIST[x] == port:
+            return True
+    return result
+
+
+def is_in_forward_table(dest, port_list):
+    forward_result = "False"
+    forward_port = -1
+    for k in port_list.keys():
+        if not is_in_disable(k):
+            for x in range(len(port_list[k]) - 1):
+                if port_list[k][x]['info']['bridge'] == dest:
+                    forward_result = "True"
+                    forward_port = k
+    return {'result' : forward_result, 'port' : forward_port}
+
+
+def broadcast_single(port_id, message, port_list, data):
+    if message['dest'] == root_bridge['source']:
+        print("Not forwarding %s/%s" %(message['source'], message['msg_id']))
+    elif is_in_forward_table(message['dest'], port_list)['result'] == "True":
+        forward_port = is_in_forward_table(message['dest'], port_list)['port']
+        for port in PORTS:
+            if port.id == forward_port:
+                port.send(data)
+                print("Forwarding %s/%s to port %s" % (message['source'], message['msg_id'], port.id))
+    else:
+        for port in PORTS:
+            if (port.id != port_id) and (not is_in_disable(port.id)):
+                port.send(data)
+        print("Broadcasting %s/%s to all active ports" % (message['source'], message['msg_id']))
+
+
+PORT_LIST = {}
+BLOCK_LIST = []
+DES_LIST = []
+ROOT_PORT = -1
+FORWARD_TABLE = {}
+
+root_bridge = {"source": args.bridge_id,
+               "dest": "ffff",
+               "msg_id": 0,
+               "type": "bpdu",
+               "message": {"id": args.bridge_id,
+                           "root": args.bridge_id,
+                           "cost": 0,
+                           "port": 0}}
 
 # Now we send a "hello" BPDU to all LANs to announce that we're here
 send_bpdus(root_bridge)
 
 # Main loop
 while True:
-  sockets = list(map(lambda p: p.socket, PORTS))
-  readable, _, execeptable = select.select(sockets, [], sockets)
+    sockets = list(map(lambda p: p.socket, PORTS))
+    readable, _, execeptable = select.select(sockets, [], sockets)
 
-  for s in readable:
-    data, addr = s.recvfrom(1500)
-    message = data.decode('utf-8')
-    message = json.loads(message)
-    if(message['type'] == "bpdu"):
-          update_root_bpdu(root_bridge, message)
-          send_bpdus(root_bridge)
-          print("New bridge '%s' cost '%s'" % (root_bridge['message']['id'] , root_bridge['message']['cost']))
-    
-    if(message['type'] == "data"):
-          broadcast(data)
-    
+    for s in readable:
+        data, addr = s.recvfrom(1500)
+        message = data.decode('utf-8')
+        message = json.loads(message)
+        if message['type'] == "bpdu":
+            message_processor(PORT_LIST, message, transfer_port_to_port_id(addr[1]))
+            change_flag = update_root_bpdu(root_bridge, message)
+            if change_flag:
+                ROOT_PORT = transfer_port_to_port_id(addr[1])
+                print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]))
+            if not is_tree_finished(PORT_LIST):
+                send_bpdus(root_bridge)
+                print("New root '%s' cost '%s'" % (root_bridge['message']['id'], root_bridge['message']['cost']))
+            else:
+                determine_dest_port(PORT_LIST, DES_LIST, BLOCK_LIST)
 
+        if message['type'] == "data":
+            if not is_in_disable(transfer_port_to_port_id(addr[1])):
+                print("Received message: %s/%s on port %s to %s" % (message['source'], message['msg_id'],
+                                                                    transfer_port_to_port_id(addr[1]), message['dest']))
+                broadcast_single(transfer_port_to_port_id(addr[1]), message, PORT_LIST, data)
 
-    print("Received message: '%s'" % message)
 
 
