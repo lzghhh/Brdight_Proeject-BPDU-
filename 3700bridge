@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+
+import sys
+import socket
+import select
+import json
+import argparse
+
+# First, grab our arguments from the command line
+#  bridge_id is our bridge ID ("1234" or whatever)
+#  lan_ports are the local UDP ports that we use to send/receive packets on our LAN(s)
+parser = argparse.ArgumentParser(description='CS 3700 bridge')
+parser.add_argument('bridge_id', type=str, help="Bridge ID (e.g., 02ab)")
+parser.add_argument('lan_ports', metavar='lan_port', type=int, nargs='+', help="UDP ports to connect to LANs")
+args = parser.parse_args()
+
+# This variable represents our bridge's ports.  It is a 0-indexed array, as per the project spec
+PORTS = []
+
+# Definition of a port
+class Port:
+  def __init__(self, id, lan_port):
+    self.id = id
+    self.lan_port = lan_port
+    self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    self.socket.bind(('localhost', 0))
+    self.isRootPort = False;
+    self.isDesignatedPort = True;
+
+  # This method sends a BPDU on this port.  Right now, it only sends a 
+  # BPDU that says this bridge believes its the root; obviously, this 
+  # will need to be updated.
+  def send_bpdu(self,bpdu):
+    bpdu['message']['port'] = self.id
+    self.send(json.dumps(bpdu).encode('utf-8'))
+
+  # This method sends the provided byte array "data" to the LAN, using the 
+  # UDP connection.
+  def send(self, data):
+    print("Sending message on port %d" % self.id)
+    self.socket.sendto(data, ('localhost', self.lan_port))
+
+# Set up our ports
+print("Bridge starting up")
+for i, lan_port in enumerate(args.lan_ports):
+  PORTS.append(Port(i, lan_port))
+
+# This method sends a BPDU on all ports.  You might want to call this regularly...
+def send_bpdus(bpdu):
+  for port in PORTS:
+    port.send_bpdu(bpdu)
+
+# Invariant, the input must be two bpdu
+def update_root_bpdu(root_bpdu,bpdu):
+      root_id = root_bpdu.get('message',0).get('root',0)
+      message_id = bpdu.get('message',0).get('root',-1)
+      root_cost = root_bpdu['message']['cost']
+      bpdu_cost = bpdu['message']['cost']
+      if (root_id < message_id):
+            root_bpdu['message']['root'] = message_id
+            root_bpdu['message']['cost'] = bpdu_cost + 1
+            root_bpdu['message']['port'] = message['message']['port']
+      elif ((root_id == message_id) & (root_cost > bpdu_cost)):
+            root_bpdu['message']['root'] = message_id
+            root_bpdu['message']['cost'] = bpdu_cost + 1
+            root_bpdu['message']['port'] = message['message']['port']
+      elif ((root_id == message_id) & (root_cost == bpdu_cost) & (root_bpdu['message']['port'] > bpdu['message']['port'] )):
+            root_bpdu['message']['root'] = message_id
+            root_bpdu['message']['cost'] = bpdu_cost + 1
+            root_bpdu['message']['port'] = message['message']['port']
+          
+            
+
+def broadcast(data):
+    for port in PORTS:
+      port.send(data)
+
+
+root_bridge = {"source": args.bridge_id, 
+                          "dest": "ffff", 
+                          "msg_id": 0,
+                          "type": "bpdu", 
+                          "message": { "id": args.bridge_id, 
+                                      "root": args.bridge_id, 
+                                      "cost": 0, 
+                                      "port": 0 }}
+
+# Now we send a "hello" BPDU to all LANs to announce that we're here
+send_bpdus(root_bridge)
+
+# Main loop
+while True:
+  sockets = list(map(lambda p: p.socket, PORTS))
+  readable, _, execeptable = select.select(sockets, [], sockets)
+
+  for s in readable:
+    data, addr = s.recvfrom(1500)
+    message = data.decode('utf-8')
+    message = json.loads(message)
+    if(message['type'] == "bpdu"):
+          update_root_bpdu(root_bridge, message)
+          send_bpdus(root_bridge)
+          print("New bridge '%s' cost '%s'" % (root_bridge['message']['id'] , root_bridge['message']['cost']))
+    
+    if(message['type'] == "data"):
+          broadcast(data)
+    
+
+
+    print("Received message: '%s'" % message)
+
+
