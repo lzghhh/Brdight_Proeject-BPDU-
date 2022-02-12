@@ -64,20 +64,17 @@ def update_root_bpdu(root_bpdu, bpdu, input_port):
     root_cost = root_bpdu['message']['cost']
     bpdu_cost = bpdu['message']['cost']
     if root_id > message_id:
-        print("111111111111111111111", flush=True)
         root_bpdu['message']['root'] = message_id
         root_bpdu['message']['cost'] = bpdu_cost + 1
         root_bpdu['message']['port'] = message['message']['port']
         change_flag = True
     elif (root_id == message_id) & (root_cost > (bpdu_cost + 1)):
-        print("2222222222222222222222222", flush=True)
         root_bpdu['message']['root'] = message_id
         root_bpdu['message']['cost'] = bpdu_cost + 1
         root_bpdu['message']['port'] = message['message']['port']
         change_flag = True
     elif ((root_id == message_id) & (root_cost == (bpdu_cost + 1)) & (
             ROOT_PORT > input_port)):
-        print("33333333333333333333333333", flush=True)
         root_bpdu['message']['root'] = message_id
         root_bpdu['message']['cost'] = bpdu_cost + 1
         root_bpdu['message']['port'] = message['message']['port']
@@ -97,12 +94,18 @@ def transfer_port_to_port_id(port):
             return PORTS[x].id
 
 
+def debug_tool(port_id):
+    for p in PORTS:
+        if port_id == p.id:
+            return p.lan_port
+
+
 def is_tree_finished(port_message_list):
     result = True
     result_holder = True
     self_root_bridge = root_bridge['message']['root']
-    print("IIIIIIIIIIIIIIIIIIIINNNNNNNNNNNNNNNNNNNN finishing?", flush=True)
-    print(port_message_list, flush=True)
+    # print("IIIIIIIIIIIIIIIIIIIINNNNNNNNNNNNNNNNNNNN finishing?", flush=True)
+    # print(port_message_list, flush=True)
     for k in port_message_list.keys():
         if not is_unified(port_message_list[k], self_root_bridge):
             return False
@@ -238,7 +241,7 @@ while True:
         message = data.decode('utf-8')
         message = json.loads(message)
         if message['type'] == "bpdu":
-            print(message, flush=True)
+            # print(message, flush=True)
             message_processor(PORT_LIST, message, transfer_port_to_port_id(addr[1]))
             change_flag = update_root_bpdu(root_bridge, message, transfer_port_to_port_id(addr[1]))
             if change_flag:
@@ -248,16 +251,25 @@ while True:
                 DES_LIST = []
                 BLOCK_LIST = []
                 print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]), flush=True)
-                print(root_bridge['message']['port'])
+                # print(root_bridge['message']['port'])
                 send_bpdus(root_bridge)
             if not is_tree_finished(PORT_LIST):
-                print("Noooooooooooooooooooooooo Smalllllllllllllllllllll", flush=True)
-                print(PORT_LIST)
+                # print("Noooooooooooooooooooooooo Smalllllllllllllllllllll", flush=True)
+                # print(PORT_LIST)
+                continue
             else:
-                print("Yeahhhhhhhhhhhhhhhhhhhhhhhhhh", flush=True)
+                # print("Yeahhhhhhhhhhhhhhhhhhhhhhhhhh", flush=True)
                 determine_dest_port(PORT_LIST, DES_LIST, BLOCK_LIST)
 
         if message['type'] == "data":
+            # print("bLLLLLLLLLLLLLLLLLLLLLLLOCK LIST", flush=True)
+            # for x in BLOCK_LIST:
+            #     print(debug_tool(x), flush=True)
+            # print("DDDDDDDDDDDDDDDDEEEEEEEEEEEEEEST LIST", flush=True)
+            # for y in DES_LIST:
+            #     print(debug_tool(y), flush=True)
+            # print("ROOT_PORRRRRRRRRRT", flush=True)
+            # print(debug_tool(ROOT_PORT), flush=True)
             if not is_in_disable(transfer_port_to_port_id(addr[1])):
                 print("Received message: %s/%s on port %s to %s" % (message['source'], message['msg_id'],
                                                                     transfer_port_to_port_id(addr[1]), message['dest']))
