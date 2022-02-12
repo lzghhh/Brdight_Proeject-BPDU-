@@ -7,6 +7,7 @@ import time
 import json
 import random
 import select
+import signal
 import socket
 import subprocess
 from functools import reduce
@@ -19,7 +20,6 @@ start = time.time()
 
 def log(caller, msg):
   print("[%02.4f  %11s]: %s" % (time.time() - start, caller, msg))
-  pass
 
 #### PARAMETERS
 
@@ -153,13 +153,18 @@ class Bridge:
   def start(self):
     args = "%s %s %s" % (os.path.join(".", EXECUTABLE_NAME), self.id, " ".join(map(lambda l: str(l.port), self.lans)))
     log("Simulator", "Starting bridge %s with command '%s'" % (self.id, args))
-    self.process = subprocess.Popen(args, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    self.process = subprocess.Popen(args,
+                                    shell=True,
+                                    stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    preexec_fn=os.setsid)
 
     def make_non_blocking(fd):
       try:
         from fcntl import fcntl, F_GETFL, F_SETFL
         flags = fcntl(fd, F_GETFL) # get current p.stdout flags
-        fcntl(fd, F_SETFL, flags | os.O_NONBLOCK) 
+        fcntl(fd, F_SETFL, flags | os.O_NONBLOCK)
       except ImportError:
         print("Warning:  Unable to load fcntl module; things may not work as expected.")
 
@@ -173,7 +178,7 @@ class Bridge:
 
   def stop(self):
     if self.process and self.process.poll() is None:
-      self.process.terminate()
+      os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
     self.process = None
 
     for lan in self.lans:
@@ -234,7 +239,7 @@ class LAN:
     data, addr = self.socket.recvfrom(1500)
     if addr not in self.clients:
       self.clients.append(addr)
-    
+
 #    log("LAN %s" % self.id, "Received message from port %s" % addr[1])
     if MESSAGE_DELAY:
       add_event(MESSAGE_DELAY + time.time() - start, lambda: self.broadcast(Message.unserialize(data), addr))
@@ -283,7 +288,7 @@ class Host:
     self.id = id
     self.lan = lan
     self.msg_count = 0
-    lan.add_host(self)    
+    lan.add_host(self)
 
     log("Host %s" % self.id, "Host created on LAN %s" % self.lan.id)
 
@@ -337,6 +342,7 @@ class Message:
   def serialize(self):
     return json.dumps({ "source": self.source, "dest": self.dest, "msg_id": self.id, "type": self.type, "message": self.message }).encode('utf-8')
 
+  @staticmethod
   def unserialize(raw):
     try:
       data = json.loads(raw.decode('utf-8'))
@@ -467,13 +473,8 @@ try:
       for fd in exceptable:
         fd.parent.exception(fd)
 
-    
     time_to_event = next_event_time() - now()
     if time_to_event <= 0:
       next_event_pop().execute()
 except ValueError as e:
   print(e)
-
-
-
-
