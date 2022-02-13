@@ -104,8 +104,6 @@ def is_tree_finished(port_message_list):
     result = True
     result_holder = True
     self_root_bridge = root_bridge['message']['root']
-    # print("IIIIIIIIIIIIIIIIIIIINNNNNNNNNNNNNNNNNNNN finishing?", flush=True)
-    # print(port_message_list, flush=True)
     for k in port_message_list.keys():
         if not is_unified(port_message_list[k], self_root_bridge):
             return False
@@ -160,7 +158,7 @@ def determine_dest_port(port_list, dest_list, block_list):
     for x in range(len(PORTS)):
         if port_list.get(PORTS[x].id, "True") == "True":
             dest_list.append(PORTS[x].id)
-            print("Designated port: %s" % PORTS[x].id)
+            # print("Designated port: %s" % PORTS[x].id)
     for k in port_list.keys():
         if not k == ROOT_PORT:
             dest_flag = True
@@ -172,10 +170,10 @@ def determine_dest_port(port_list, dest_list, block_list):
                     dest_flag = False
             if dest_flag:
                 dest_list.append(k)
-                print("Designated port: '%s'" % k)
+                # print("Designated port: '%s'" % k)
             else:
                 block_list.append(k)
-                print("Disabled port: '%s'" % k)
+                # print("Disabled port: '%s'" % k)
 
 
 def is_in_disable(port):
@@ -200,13 +198,14 @@ def is_in_forward_table(dest, port_list):
 
 def broadcast_single(port_id, message, port_list, data):
     if message['dest'] == root_bridge['source']:
-        print("Not forwarding %s/%s" % (message['source'], message['msg_id']))
+        countinue
+        # print("Not forwarding %s/%s" % (message['source'], message['msg_id']))
     elif is_in_forward_table(message['dest'], port_list)['result'] == "True":
         forward_port = is_in_forward_table(message['dest'], port_list)['port']
         for port in PORTS:
             if port.id == forward_port:
                 port.send(data)
-                print("Forwarding %s/%s to port %s" % (message['source'], message['msg_id'], port.id))
+                # print("Forwarding %s/%s to port %s" % (message['source'], message['msg_id'], port.id))
     else:
         for port in PORTS:
             if (port.id != port_id) and (not is_in_disable(port.id)):
@@ -245,12 +244,12 @@ while True:
             message_processor(PORT_LIST, message, transfer_port_to_port_id(addr[1]))
             change_flag = update_root_bpdu(root_bridge, message, transfer_port_to_port_id(addr[1]))
             if change_flag:
-                print("New root '%s' cost '%s'" % (root_bridge['message']['root'], root_bridge['message']['cost']),
-                      flush=True)
+                # print("New root '%s' cost '%s'" % (root_bridge['message']['root'], root_bridge['message']['cost']),
+                #       flush=True)
                 ROOT_PORT = transfer_port_to_port_id(addr[1])
                 DES_LIST = []
                 BLOCK_LIST = []
-                print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]), flush=True)
+                # print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]), flush=True)
                 # print(root_bridge['message']['port'])
                 send_bpdus(root_bridge)
             if not is_tree_finished(PORT_LIST):
@@ -271,6 +270,6 @@ while True:
             # print("ROOT_PORRRRRRRRRRT", flush=True)
             # print(debug_tool(ROOT_PORT), flush=True)
             if not is_in_disable(transfer_port_to_port_id(addr[1])):
-                print("Received message: %s/%s on port %s to %s" % (message['source'], message['msg_id'],
-                                                                    transfer_port_to_port_id(addr[1]), message['dest']))
+                # print("Received message: %s/%s on port %s to %s" % (message['source'], message['msg_id'],
+                #                                                     transfer_port_to_port_id(addr[1]), message['dest']))
                 broadcast_single(transfer_port_to_port_id(addr[1]), message, PORT_LIST, data)
