@@ -180,10 +180,10 @@ def determine_dest_port(port_list, dest_list, block_list):
             for x in range(len(PORTS)):
                 dest_list = []
                 dest_list.append(PORTS[x].id)
-    print("DES_LIST", flush=True)
-    print(DES_LIST, flush=True)
-    print('BLOCK_LIST', flush=True)
-    print(BLOCK_LIST, flush=True)
+    # print("DES_LIST", flush=True)
+    # print(DES_LIST, flush=True)
+    # print('BLOCK_LIST', flush=True)
+    # print(BLOCK_LIST, flush=True)
 
 
 def is_in_disable(port):
@@ -238,7 +238,7 @@ root_bridge = {"source": args.bridge_id,
 
 # Now we send a "hello" BPDU to all LANs to announce that we're here
 send_bpdus(root_bridge)
-start =  (int(round(time.time() * 1000)))
+
 
 # Main loop
 while True:
@@ -249,7 +249,7 @@ while True:
         data, addr = s.recvfrom(1500)
         message = data.decode('utf-8')
         message = json.loads(message)
-        print(message, flush=True)
+        # print(message, flush=True)
 
         if message['type'] == "bpdu":
             DES_LIST = []
@@ -263,21 +263,19 @@ while True:
                 ROOT_PORT = transfer_port_to_port_id(addr[1])
                 DES_LIST = []
                 BLOCK_LIST = []
-                print(addr[1], flush=True)
-                print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]), flush=True)
+                # print(addr[1], flush=True)
+                # print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]), flush=True)
                 # print(root_bridge['message']['port'])
-                print(root_bridge, flush=True)
+                # print(root_bridge, flush=True)
                 send_bpdus(root_bridge)
             if not is_tree_finished(PORT_LIST):
-                print("Noooooooooooooooooooooooo Smalllllllllllllllllllll", flush=True)
-                print(PORT_LIST, flush=True)
+                # print("Noooooooooooooooooooooooo Smalllllllllllllllllllll", flush=True)
+                # print(PORT_LIST, flush=True)
                 send_bpdus(root_bridge)
                 continue
             else:
-                print("Yeahhhhhhhhhhhhhhhhhhhhhhhhhh", flush=True)
-                print(PORT_LIST, flush = True)
-                if (start + 500 > (int(round(time.time() * 1000)))):
-                    send_bpdus(root_bridge)
+                # print("Yeahhhhhhhhhhhhhhhhhhhhhhhhhh", flush=True)
+                # print(PORT_LIST, flush = True)
                 determine_dest_port(PORT_LIST, DES_LIST, BLOCK_LIST)
 
         if message['type'] == "data":
