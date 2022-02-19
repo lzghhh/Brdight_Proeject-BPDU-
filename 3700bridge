@@ -136,7 +136,8 @@ def is_unified(port_list, self_root_bridge):
 def message_processor(port_list, message, input_port):
     if port_list.get(input_port, "True") == "True":
         port_list.update({input_port: [{'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
-                                           , 'root': message['message']['root'], 'cost': message['message']['cost']}]})
+                                           , 'root': message['message']['root'], 'cost': message['message']['cost'],
+                                        'time' : (int(round(time.time() * 1000)))}]})
     else:
         port_list.update({input_port: update_bpdu_in_array(port_list.get(input_port), message)})
 
@@ -147,12 +148,14 @@ def update_bpdu_in_array(ports, message):
         if ((message['message']['id'] == ports[x]['info']['bridge'])
                 and (message['message']['port'] == ports[x]['info']['port'])):
             ports[x] = {'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
-                , 'root': message['message']['root'], 'cost': message['message']['cost']}
+                , 'root': message['message']['root'], 'cost': message['message']['cost'],
+                        'time' : (int(round(time.time() * 1000)))}
             finish_flag = True
 
     if not finish_flag:
         ports.append({'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
-                         , 'root': message['message']['root'], 'cost': message['message']['cost']})
+                         , 'root': message['message']['root'], 'cost': message['message']['cost'],
+                      'time' : (int(round(time.time() * 1000)))})
     return ports
 
 
@@ -222,6 +225,16 @@ def broadcast_single(port_id, message, port_list, data):
         print("Broadcasting %s/%s to all active ports" % (message['source'], message['msg_id']))
 
 
+def check_dead_bridge():
+    for k in PORT_LIST.keys():
+        for x in range(len(PORT_LIST[k])):
+            if PORT_LIST[k][x]['time'] + 750 < (int(round(time.time() * 1000))):
+                return True
+    return False
+
+
+
+
 PORT_LIST = {}
 BLOCK_LIST = []
 DES_LIST = []
@@ -240,15 +253,29 @@ root_bridge = {"source": args.bridge_id,
 # Now we send a "hello" BPDU to all LANs to announce that we're here
 send_bpdus(root_bridge)
 start = (int(round(time.time() * 1000)))
+start2 = (int(round(time.time() * 1000)))
 
 # Main loop
 while True:
     sockets = list(map(lambda p: p.socket, PORTS))
     readable, _, execeptable = select.select(sockets, [], sockets)
-    if start + 1000 < (int(round(time.time() * 1000))):
-        PORT_LIST = {}
+    if start + 500 < (int(round(time.time() * 1000))):
         send_bpdus(root_bridge)
         start = (int(round(time.time() * 1000)))
+    if start2 + 750 < (int(round(time.time() * 1000))):
+        if check_dead_bridge():
+            root_bridge = {"source": args.bridge_id,
+                           "dest": "ffff",
+                           "msg_id": 0,
+                           "type": "bpdu",
+                           "message": {"id": args.bridge_id,
+                                       "root": args.bridge_id,
+                                       "cost": 0,
+                                       "port": 0}}
+            PORT_LIST = {}
+            DES_LIST = []
+            BLOCK_LIST = []
+            ROOT_PORT = -1
 
     for s in readable:
         data, addr = s.recvfrom(1500)
