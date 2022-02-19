@@ -236,14 +236,19 @@ root_bridge = {"source": args.bridge_id,
                            "cost": 0,
                            "port": 0}}
 
+
 # Now we send a "hello" BPDU to all LANs to announce that we're here
 send_bpdus(root_bridge)
-
+start = (int(round(time.time() * 1000)))
 
 # Main loop
 while True:
     sockets = list(map(lambda p: p.socket, PORTS))
     readable, _, execeptable = select.select(sockets, [], sockets)
+    if start + 1000 < (int(round(time.time() * 1000))):
+        PORT_LIST = {}
+        send_bpdus(root_bridge)
+        start = (int(round(time.time() * 1000)))
 
     for s in readable:
         data, addr = s.recvfrom(1500)
