@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+from re import T
 import sys
 import socket
 import select
 import json
 import argparse
+import time
 
 # First, grab our arguments from the command line
 #  bridge_id is our bridge ID ("1234" or whatever)
@@ -174,6 +176,14 @@ def determine_dest_port(port_list, dest_list, block_list):
             else:
                 block_list.append(k)
                 # print("Disabled port: '%s'" % k)
+        else:
+            for x in range(len(PORTS)):
+                dest_list = []
+                dest_list.append(PORTS[x].id)
+    print("DES_LIST", flush=True)
+    print(DES_LIST, flush=True)
+    print('BLOCK_LIST', flush=True)
+    print(BLOCK_LIST, flush=True)
 
 
 def is_in_disable(port):
@@ -198,8 +208,7 @@ def is_in_forward_table(dest, port_list):
 
 def broadcast_single(port_id, message, port_list, data):
     if message['dest'] == root_bridge['source']:
-        countinue
-        # print("Not forwarding %s/%s" % (message['source'], message['msg_id']))
+        print("Not forwarding %s/%s" % (message['source'], message['msg_id']))
     elif is_in_forward_table(message['dest'], port_list)['result'] == "True":
         forward_port = is_in_forward_table(message['dest'], port_list)['port']
         for port in PORTS:
@@ -229,6 +238,7 @@ root_bridge = {"source": args.bridge_id,
 
 # Now we send a "hello" BPDU to all LANs to announce that we're here
 send_bpdus(root_bridge)
+start =  (int(round(time.time() * 1000)))
 
 # Main loop
 while True:
@@ -239,7 +249,11 @@ while True:
         data, addr = s.recvfrom(1500)
         message = data.decode('utf-8')
         message = json.loads(message)
+        print(message, flush=True)
+
         if message['type'] == "bpdu":
+            DES_LIST = []
+            BLOCK_LIST = []
             # print(message, flush=True)
             message_processor(PORT_LIST, message, transfer_port_to_port_id(addr[1]))
             change_flag = update_root_bpdu(root_bridge, message, transfer_port_to_port_id(addr[1]))
@@ -249,15 +263,21 @@ while True:
                 ROOT_PORT = transfer_port_to_port_id(addr[1])
                 DES_LIST = []
                 BLOCK_LIST = []
-                # print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]), flush=True)
+                print(addr[1], flush=True)
+                print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]), flush=True)
                 # print(root_bridge['message']['port'])
+                print(root_bridge, flush=True)
                 send_bpdus(root_bridge)
             if not is_tree_finished(PORT_LIST):
-                # print("Noooooooooooooooooooooooo Smalllllllllllllllllllll", flush=True)
-                # print(PORT_LIST)
+                print("Noooooooooooooooooooooooo Smalllllllllllllllllllll", flush=True)
+                print(PORT_LIST, flush=True)
+                send_bpdus(root_bridge)
                 continue
             else:
-                # print("Yeahhhhhhhhhhhhhhhhhhhhhhhhhh", flush=True)
+                print("Yeahhhhhhhhhhhhhhhhhhhhhhhhhh", flush=True)
+                print(PORT_LIST, flush = True)
+                if (start + 500 > (int(round(time.time() * 1000)))):
+                    send_bpdus(root_bridge)
                 determine_dest_port(PORT_LIST, DES_LIST, BLOCK_LIST)
 
         if message['type'] == "data":
