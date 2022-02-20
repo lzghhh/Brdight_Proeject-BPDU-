@@ -46,6 +46,7 @@ class Port:
 print("Bridge starting up")
 
 temp_list = []
+
 # This for loop will assign each lan port a port number starting from 0 to n,
 # and if a lan port appear twice, it will be discarded.
 for i, lan_port in enumerate(args.lan_ports):
@@ -63,25 +64,25 @@ def send_bpdus(bpdu):
 # Invariant, the input must be two bpdu
 # This part will determine whether the root bridge and port should be changed or not. If changed, it will send a
 # True as root being changed, and if not changetd, it will send a False as a signal of not changing.
+# First Condition: The received message has a smaller root id.
+# Second Condition: The received message has a smaller cost.
+# Third Condition: The received message port is smaller.
 def update_root_bpdu(root_bpdu, bpdu, input_port):
     change_flag = False
     root_id = root_bpdu.get('message', 0).get('root', 0)
     message_id = bpdu.get('message', 0).get('root', -1)
     root_cost = root_bpdu['message']['cost']
     bpdu_cost = bpdu['message']['cost']
-    # First Condition: The received message has a smaller root id.
     if root_id > message_id:
         root_bpdu['message']['root'] = message_id
         root_bpdu['message']['cost'] = bpdu_cost + 1
         root_bpdu['message']['port'] = message['message']['port']
         change_flag = True
-    # Second Condition: The received message has a smaller cost.
     elif (root_id == message_id) & (root_cost > (bpdu_cost + 1)):
         root_bpdu['message']['root'] = message_id
         root_bpdu['message']['cost'] = bpdu_cost + 1
         root_bpdu['message']['port'] = message['message']['port']
         change_flag = True
-    # Third Condition: The received message port is smaller.
     elif ((root_id == message_id) & (root_cost == (bpdu_cost + 1)) & (
             ROOT_PORT > input_port)):
         root_bpdu['message']['root'] = message_id
@@ -105,7 +106,14 @@ def transfer_port_to_port_id(port):
             return PORTS[x].id
 
 
+def debug_tool(port_id):
+    for p in PORTS:
+        if port_id == p.id:
+            return p.lan_port
+
+
 # This will determine whether the bridge in its local view is finished or not.
+#  Line 123 This will determine whether all ports in the bridge share the small root bridge or not.
 def is_tree_finished(port_message_list):
     result = True
     result_holder = True
@@ -115,7 +123,6 @@ def is_tree_finished(port_message_list):
             return False
         elif result_holder:
             result_holder = port_message_list[k][0]['root']
-        # This will determine whether all ports in the bridge share the small root bridge or not.
         else:
             result = result and result_holder == port_message_list[k][0]['root']
             result_holder = port_message_list[k][0]['root']
@@ -144,40 +151,42 @@ def is_unified(port_list, self_root_bridge):
 # Format as {#port_id 0 : [{'info': {'bridge': 9e3a, 'port': 1} , 'root': 08ad, 'cost': 1, 'time' : 10086},
 #                          {'info': {'bridge': ff3a, 'port': 2} , 'root': 08ad, 'cost': 2, 'time' : 10010}],
 #            #port_id 1 : [{'info': {'bridge': 54de, 'port': 1} , 'root': 08ad, 'cost': 1, 'time' : 10000}]}
+# Line 156 This indicates that the list does not store this port information before.
+# Line 161 This will update the information stored in the port's list.
 def message_processor(port_list, message, input_port):
     if port_list.get(input_port, "True") == "True":
-        # This indicates that the list does not store this port information before.
         port_list.update({input_port: [{'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
                                            , 'root': message['message']['root'], 'cost': message['message']['cost'],
-                                        'time': (int(round(time.time() * 1000)))}]})
+                                        'time' : (int(round(time.time() * 1000)))}]})
     else:
-        # This will update the information stored in the port's list.
         port_list.update({input_port: update_bpdu_in_array(port_list.get(input_port), message)})
 
 
+# Line 170 This will update the information received for the port that stored before.
+# Line 179 This indicates that it received a new information from a new port.
 def update_bpdu_in_array(ports, message):
     finish_flag = False
     for x in range(len(ports)):
-        # This will update the information received for the port that stored before.
         if ((message['message']['id'] == ports[x]['info']['bridge'])
                 and (message['message']['port'] == ports[x]['info']['port'])):
             ports[x] = {'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
                 , 'root': message['message']['root'], 'cost': message['message']['cost'],
-                        'time': (int(round(time.time() * 1000)))}
+                        'time' : (int(round(time.time() * 1000)))}
             finish_flag = True
 
     if not finish_flag:
-        # This indicates that it received a new information from a new port.
         ports.append({'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
                          , 'root': message['message']['root'], 'cost': message['message']['cost'],
-                      'time': (int(round(time.time() * 1000)))})
+                      'time' : (int(round(time.time() * 1000)))})
     return ports
 
 
 # This will determine which ports are designated, which are disabled.
+# Line 192 This part indicates that there is no incoming message on this port.
+# Line 200 This indicates that this port is not the best port on the LAN with larger cost.
+# Line 203 This indicates that this port is not the best port on the LAN with larger bridge ID.
 def determine_dest_port(port_list, dest_list, block_list):
     for x in range(len(PORTS)):
-        # This part indicates that there is no incoming message on this port.
         if port_list.get(PORTS[x].id, "True") == "True":
             dest_list.append(PORTS[x].id)
             print("Designated port: %s" % PORTS[x].id)
@@ -185,10 +194,8 @@ def determine_dest_port(port_list, dest_list, block_list):
         if not k == ROOT_PORT:
             dest_flag = True
             for y in range(len(port_list[k])):
-                # This indicates that this port is not the best port on the LAN with larger cost.
                 if port_list[k][y]['cost'] < root_bridge['message']['cost']:
                     dest_flag = False
-                # This indicates that this port is not the best port on the LAN with larger bridge ID.
                 elif (port_list[k][y]['cost'] == root_bridge['message']['cost']
                       and port_list[k][y]['info']['bridge'] < root_bridge['source']):
                     dest_flag = False
@@ -227,18 +234,18 @@ def is_in_forward_table(dest, port_list):
 
 
 # This part will determine which port should forward the message or not forwarding or broadcasting.
+# Line 246 This indicates that the message arrives at the designated bridge.
+# Line 249 This indicates that the destination is in the forwarding table with a specific port.
+# Line 256This indicates that the destination is not in the forwarding table and it will be broadcast.
 def broadcast_single(port_id, message, port_list, data):
-    # This indicates that the message arrives at the designated bridge.
     if message['dest'] == root_bridge['source']:
         print("Not forwarding %s/%s" % (message['source'], message['msg_id']))
-    # This indicates that the destination is in the forwarding table with a specific port.
     elif is_in_forward_table(message['dest'], port_list)['result'] == "True":
         forward_port = is_in_forward_table(message['dest'], port_list)['port']
         for port in PORTS:
             if port.id == forward_port:
                 port.send(data)
                 print("Forwarding %s/%s to port %s" % (message['source'], message['msg_id'], port.id))
-    # This indicates that the destination is not in the forwarding table and it will be broadcast.
     else:
         for port in PORTS:
             if (port.id != port_id) and (not is_in_disable(port.id)):
@@ -250,9 +257,11 @@ def broadcast_single(port_id, message, port_list, data):
 def check_dead_bridge():
     for k in PORT_LIST.keys():
         for x in range(len(PORT_LIST[k])):
-            if PORT_LIST[k][x]['time'] + 500 < (int(round(time.time() * 1000))):
+            if PORT_LIST[k][x]['time'] + 750 < (int(round(time.time() * 1000))):
                 return True
     return False
+
+
 
 
 PORT_LIST = {}
@@ -269,22 +278,36 @@ root_bridge = {"source": args.bridge_id,
                            "cost": 0,
                            "port": 0}}
 
+
 # Now we send a "hello" BPDU to all LANs to announce that we're here
 send_bpdus(root_bridge)
 start = (int(round(time.time() * 1000)))
 start2 = (int(round(time.time() * 1000)))
 
 # Main loop
+# Line 313 This part will send bpdu every 500ms.
+# Line 316 This will check any time-out bridge for every 700ms. If there is a time-out bridge, the network will be
+# reconfigured.
+# Line 332 This will will process the message.
+# Line 338 This part indicates that the received message stands for bpdu.
+# Line 342 This part processed the message into our forwarding table dictionary.
+# Line 344 This part will determine whether the root bridge and port should be changed or not and change to
+# which port and bridge.
+# Line 346 Every time the root bridge and port changes, the block list and designated list will be reconfigured.
+# Line 354 This part indicates that the root port in the forwarding table is not unified and continue to send bpdu
+# for updating.
+# Line 358 This part indicates that the spanning tree is finished on this local part as all ports on the LAN share
+# the same root bridge and it will determine the designated list and block list.
+# Line 361 This indicates that the received message is a data message.
+# Line 363 This will determine whether the received message is on disabled port or designated port or root port.
+# Line 367 This will use the forwarding table to determine which ports should forward the data, or it arrives
+# at the destination or it needs to be broadcast.
 while True:
     sockets = list(map(lambda p: p.socket, PORTS))
     readable, _, execeptable = select.select(sockets, [], sockets)
-    # This part will send bpdu every 500ms.
     if start + 500 < (int(round(time.time() * 1000))):
         send_bpdus(root_bridge)
         start = (int(round(time.time() * 1000)))
-
-    # 　This will check any time-out bridge for every 700ms. If there is a time-out bridge, the network will be
-    #   reconfigured.
     if start2 + 700 < (int(round(time.time() * 1000))):
         if check_dead_bridge():
             root_bridge = {"source": args.bridge_id,
@@ -301,21 +324,15 @@ while True:
             ROOT_PORT = -1
 
     for s in readable:
-        # This will will process the message.
         data, addr = s.recvfrom(1500)
         message = data.decode('utf-8')
         message = json.loads(message)
 
-        # This part indicates that the received message stands for bpdu.
         if message['type'] == "bpdu":
             DES_LIST = []
             BLOCK_LIST = []
-            # This part processed the message into our forwarding table dictionary.
             message_processor(PORT_LIST, message, transfer_port_to_port_id(addr[1]))
-            # This part will determine whether the root bridge and port should be changed or not and change to
-            # which port and bridge.
             change_flag = update_root_bpdu(root_bridge, message, transfer_port_to_port_id(addr[1]))
-            # Every time the root bridge and port changes, the block list and designated list will be reconfigured.
             if change_flag:
                 print("New root '%s' cost '%s'" % (root_bridge['message']['root'], root_bridge['message']['cost']))
                 ROOT_PORT = transfer_port_to_port_id(addr[1])
@@ -323,22 +340,14 @@ while True:
                 BLOCK_LIST = []
                 print("Root Port: '%s'" % transfer_port_to_port_id(addr[1]))
                 send_bpdus(root_bridge)
-            # This part indicates that the root port in the forwarding table is not unified and continue to send bpdu
-            # for updating.
             if not is_tree_finished(PORT_LIST):
                 send_bpdus(root_bridge)
                 continue
-            # This part indicates that the spanning tree is finished on this local part as all ports on the LAN share
-            # the same root bridge and it will determine the designated list and block list.
             else:
                 determine_dest_port(PORT_LIST, DES_LIST, BLOCK_LIST)
 
-        # This indicates that the received message is a data message.
         if message['type'] == "data":
-            # This will determine whether the received message is on disabled port or designated port or root port.
             if not is_in_disable(transfer_port_to_port_id(addr[1])):
                 print("Received message: %s/%s on port %s to %s" % (message['source'], message['msg_id'],
                                                                     transfer_port_to_port_id(addr[1]), message['dest']))
-                # This will use the forwarding table to determine which ports should forward the data, or it arrives
-                # at the destination or it needs to be broadcast.
                 broadcast_single(transfer_port_to_port_id(addr[1]), message, PORT_LIST, data)
