@@ -149,11 +149,7 @@ def message_processor(port_list, message, input_port):
         # This indicates that the list does not store this port information before.
         port_list.update({input_port: [{'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
                                            , 'root': message['message']['root'], 'cost': message['message']['cost'],
-<<<<<<< HEAD
                                         'time': (int(round(time.time() * 1000)))}]})
-=======
-                                        'time' : (int(round(time.time() * 1000)))}]})
->>>>>>> dcbebab404f1c0f2cd1298577fa7bdda8d10e0ba
     else:
         # This will update the information stored in the port's list.
         port_list.update({input_port: update_bpdu_in_array(port_list.get(input_port), message)})
@@ -167,22 +163,14 @@ def update_bpdu_in_array(ports, message):
                 and (message['message']['port'] == ports[x]['info']['port'])):
             ports[x] = {'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
                 , 'root': message['message']['root'], 'cost': message['message']['cost'],
-<<<<<<< HEAD
                         'time': (int(round(time.time() * 1000)))}
-=======
-                        'time' : (int(round(time.time() * 1000)))}
->>>>>>> dcbebab404f1c0f2cd1298577fa7bdda8d10e0ba
             finish_flag = True
 
     if not finish_flag:
         # This indicates that it received a new information from a new port.
         ports.append({'info': {'bridge': message['message']['id'], 'port': message['message']['port']}
                          , 'root': message['message']['root'], 'cost': message['message']['cost'],
-<<<<<<< HEAD
                       'time': (int(round(time.time() * 1000)))})
-=======
-                      'time' : (int(round(time.time() * 1000)))})
->>>>>>> dcbebab404f1c0f2cd1298577fa7bdda8d10e0ba
     return ports
 
 
@@ -258,27 +246,15 @@ def broadcast_single(port_id, message, port_list, data):
         print("Broadcasting %s/%s to all active ports" % (message['source'], message['msg_id']))
 
 
-<<<<<<< HEAD
 # This will check whether the bridge is time-out or not.
 def check_dead_bridge():
     for k in PORT_LIST.keys():
         for x in range(len(PORT_LIST[k])):
             if PORT_LIST[k][x]['time'] + 500 < (int(round(time.time() * 1000))):
-=======
-def check_dead_bridge():
-    for k in PORT_LIST.keys():
-        for x in range(len(PORT_LIST[k])):
-            if PORT_LIST[k][x]['time'] + 750 < (int(round(time.time() * 1000))):
->>>>>>> dcbebab404f1c0f2cd1298577fa7bdda8d10e0ba
                 return True
     return False
 
 
-<<<<<<< HEAD
-=======
-
-
->>>>>>> dcbebab404f1c0f2cd1298577fa7bdda8d10e0ba
 PORT_LIST = {}
 BLOCK_LIST = []
 DES_LIST = []
@@ -293,7 +269,6 @@ root_bridge = {"source": args.bridge_id,
                            "cost": 0,
                            "port": 0}}
 
-
 # Now we send a "hello" BPDU to all LANs to announce that we're here
 send_bpdus(root_bridge)
 start = (int(round(time.time() * 1000)))
@@ -303,7 +278,6 @@ start2 = (int(round(time.time() * 1000)))
 while True:
     sockets = list(map(lambda p: p.socket, PORTS))
     readable, _, execeptable = select.select(sockets, [], sockets)
-<<<<<<< HEAD
     # This part will send bpdu every 500ms.
     if start + 500 < (int(round(time.time() * 1000))):
         send_bpdus(root_bridge)
@@ -312,12 +286,6 @@ while True:
     # 　This will check any time-out bridge for every 700ms. If there is a time-out bridge, the network will be
     #   reconfigured.
     if start2 + 700 < (int(round(time.time() * 1000))):
-=======
-    if start + 500 < (int(round(time.time() * 1000))):
-        send_bpdus(root_bridge)
-        start = (int(round(time.time() * 1000)))
-    if start2 + 750 < (int(round(time.time() * 1000))):
->>>>>>> dcbebab404f1c0f2cd1298577fa7bdda8d10e0ba
         if check_dead_bridge():
             root_bridge = {"source": args.bridge_id,
                            "dest": "ffff",
